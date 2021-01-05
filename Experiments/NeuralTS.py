@@ -54,7 +54,7 @@ class MeanEstimator(nn.Module):
         # Pass the input tensor through each of our operations
         x=self.sequential(x)
     
-        return np.sqrt(m)*x
+        return np.sqrt(self.m)*x
     
 ## flatten a large tuple containing tensors of different sizes
 def flatten(tensor):
@@ -145,7 +145,7 @@ class NeuralTS:
         self.t=1
         self.Design = self.reg*np.eye(self.p)
         self.DesignInv = (1/self.reg)*np.eye(self.p)
-        self.estimated_rewards=torch.Tensor([])
+        self.ChosenArms=[]
         self.rewards=torch.Tensor([])
     
     def chooseArmToPlay(self):
@@ -160,15 +160,19 @@ class NeuralTS:
             estimated_rewards.append(r_tilda.detach().numpy())
             
         arm_to_pull=np.argmax(estimated_rewards)
-        
+        self.ChosenArms.append(arm_to_pull)
         return arm_to_pull
 
     def receiveReward(self,arm,reward):
-        self.estimated_rewards=torch.cat([self.estimated_rewards,self.estimator(self.features[arm])])
-        self.rewards=torch.cat([self.rewards,torch.Tensor([reward])])
-        self.optimizer.zero_grad() 
-    
-        self.current_loss=self.criterion(self.estimated_rewards,self.rewards,self.m,self.reg,get_theta(self.estimator),self.theta_zero)
+        estimated_rewards=torch.Tensor([])
+        #calculing the f(x_t,k,\theta_{t-1}) 
+        for arm in self.ChosenArms:
+               estimated_rewards=torch.cat([estimated_rewards,self.estimator(self.features[arm])])
+                
+        self.rewards=torch.cat([self.rewards,torch.Tensor([reward])]) #updating the list of the true rewards obtained
+#         torch.autograd.set_detect_anomaly(True)
+        
+        self.current_loss=self.criterion(estimated_rewards,self.rewards,self.m,self.reg,get_theta(self.estimator),self.theta_zero)
         
         if self.t==1:
             self.current_loss.backward(retain_graph=True)    
@@ -176,26 +180,25 @@ class NeuralTS:
             self.current_loss.backward
             
         self.optimizer.step() 
+        self.optimizer.zero_grad() 
        
         #f(x,theta_t)
-      
         f_t=self.estimator(self.features[arm])
         estimated_reward=f_t.detach().numpy()
-        if self.t%10==0:
+        if self.t%100==0:
             print("estimated reward",estimated_reward)
             print("real reward",reward)
             print("loss ",self.current_loss)
 
         g=torch.autograd.grad(outputs=f_t,inputs=self.estimator.parameters())
         g=flatten(g).detach().numpy()
-        g=g/(np.sqrt(m))
+        g=g/(np.sqrt(self.m))
         # online update of the inverse of the design matrix
-#         self.DesignInv=np.matrix.clip(self.DesignInv,-100,100)  
 #         omega=self.DesignInv@g
 #         self.DesignInv-=(omega@(omega.T))/(1+(g.T)@omega)
         self.Design+=g@(g.T)
         self.DesignInv=la.inv(self.Design)
-        print(la.norm(self.DesignInv))
+#         print(la.norm(self.DesignInv))
         self.t+=1
 
     def name(self):
