@@ -34,26 +34,39 @@ class MeanEstimator(nn.Module):
         
         self.modules = [nn.Linear(d,m,bias=False),nn.ReLU()]
         
-        first_init=np.sqrt(4/m)*torch.randn((self.m,(self.d//2)-1))
-        self.modules[0].weight.data=torch.cat([first_init,torch.zeros(self.m,1),torch.zeros(self.m,1),first_init],axis=1)
-        
+       
         for i in range (1,L-1):
-            init=np.sqrt(4/m)*torch.randn((self.m,(self.m//2)-1))
             self.modules.append(nn.Linear(m,m,bias=False))
-            self.modules[-1].weight.data=torch.cat([init,torch.zeros(self.m,1),torch.zeros(self.m,1),init],axis=1)
-            self.modules.append(nn.Tanh())
+            self.modules.append(nn.ReLU())
             
         last_init=np.sqrt(2/m)*torch.randn(1,self.m//2)
+       
         self.modules.append(nn.Linear(m,1,bias=False))
-        self.modules[-1].weight.data=torch.cat([last_init,last_init],axis=1)
-        self.modules.append(nn.Tanh())
-
-        self.sequential = nn.Sequential(*self.modules)
+        self.modules.append(nn.ReLU())
         
-    def forward(self, x):
+
+        self.sequential = nn.ModuleList(self.modules)
+      
+        
+    def init_weights(self):
+         first_init=np.sqrt(4/self.m)*torch.randn((self.m,(self.d//2)-1))
+         first_init=torch.cat([first_init,torch.zeros(self.m,1),torch.zeros(self.m,1),first_init],axis=1)
+         self.sequential[0].weight.data=first_init
+         
+         for i in range(2,self.L-1):
+             if i%2==0:
+                 init=np.sqrt(4/self.m)*torch.randn((self.m,(self.m//2)-1))
+                 self.sequential[i].weight.data=torch.cat([init,torch.zeros(self.m,1),torch.zeros(self.m,1),init],axis=1)
+                 
+         last_init=np.sqrt(2/self.m)*torch.randn(1,self.m//2)
+         self.sequential[-2].weight.data=torch.cat([last_init,last_init],axis=1)
+        
+        
+    def forward(self,x):
+        x=x
         # Pass the input tensor through each of our operations
-        x=self.sequential(x)
-    
+        for layer in self.sequential:
+            x = layer(x)
         return np.sqrt(self.m)*x
     
 ## flatten a large tuple containing tensors of different sizes
@@ -93,7 +106,6 @@ def transform(x):
 def generate_MAB_problem(K,d,sigma):
     #Generation of normalized features - ||x|| = 1 and x symmetric
     X = torch.randn((K,d))
-    cut=(K//2)
     X=torch.Tensor([transform(x) for x in X])
 
     #Generation of a random vector theta with norm 1
@@ -122,53 +134,60 @@ def load_MAB_problem(K,d,sigma,display=True):
 
 #NeuralTS algorithm
 class NeuralTS:
-    """Linear Thompson Sampling Strategy"""
-    def __init__(self,X,nu,m,L,estimator,criterion,reg=1,name='NeuralTS'):
+    """Neural Thompson Sampling Strategy"""
+    def __init__(self,X,nu,m,L,estimator,criterion,reg=1,bandit_generator=None,sigma=None,name='NeuralTS'):
         self.features=X
         self.reg=reg
         (self.K,self.d) = np.shape(X)  
         self.nu=nu
+        self.sigma=sigma
         self.L=L
         self.m=m
         self.strat_name=name
         self.estimator=estimator(self.d,m,L)
         self.theta_zero=get_theta(self.estimator)
-        self.optimizer = torch.optim.SGD(self.estimator.parameters(), lr = 10**(-5))
+        self.optimizer = torch.optim.Adam(self.estimator.parameters(), lr = 10**(-3))
         self.current_loss=0
         self.criterion=criterion
         self.p=(self.theta_zero).size(0)
+        self.bandit_generator=bandit_generator
         self.clear()
 
     def clear(self):
         # initialize the design matrix, its inverse, 
         # the vector containing the sum of r_s*x_s and the least squares estimate
         self.t=1
-        self.Design = self.reg*np.eye(self.p)
-        self.DesignInv = (1/self.reg)*np.eye(self.p)
+        self.Design = torch.Tensor(self.reg*np.eye(self.p))
+        self.DesignInv = torch.Tensor((1/self.reg)*np.eye(self.p))
         self.ChosenArms=[]
         self.rewards=torch.Tensor([])
-    
+            
+        self.estimator.init_weights()
+        
     def chooseArmToPlay(self):
-        estimated_rewards=[]
+        estimated_rewards=torch.Tensor([])
         for k in range(self.K):
             f=self.estimator(self.features[k])
             g=torch.autograd.grad(outputs=f,inputs=self.estimator.parameters())
-            g=flatten(g).detach().numpy()
+            g=flatten(g).detach()
             
-            sigma=(self.reg*(g)@self.DesignInv@(g)/(self.m))
-            r_tilda=(self.nu*self.nu)*sigma*torch.randn(1)+f.detach()
-            estimated_rewards.append(r_tilda.detach().numpy())
-            
-        arm_to_pull=np.argmax(estimated_rewards)
-        self.ChosenArms.append(arm_to_pull)
-        return arm_to_pull
+            sigma_squared=(self.reg*(1/self.m)*torch.matmul(torch.matmul(g.T,self.DesignInv),g))
+            sigma=torch.sqrt(sigma_squared)
+           
+            r_tilda=(self.nu)*(sigma)*torch.randn(1)+f.detach()
+            estimated_rewards=torch.cat([estimated_rewards,r_tilda.detach()])
+        
+            arm_to_pull=torch.argmax(estimated_rewards)
+            self.ChosenArms.append(self.features[arm_to_pull])
+            return arm_to_pull
 
     def receiveReward(self,arm,reward):
         estimated_rewards=torch.Tensor([])
         #calculing the f(x_t,k,\theta_{t-1}) 
-        for arm in self.ChosenArms:
-               estimated_rewards=torch.cat([estimated_rewards,self.estimator(self.features[arm])])
-                
+        for context in self.ChosenArms:
+               estimated_rewards=torch.cat([estimated_rewards,self.estimator(context)])
+               
+        # print(torch.norm(get_theta(self.estimator)))
         self.rewards=torch.cat([self.rewards,torch.Tensor([reward])]) #updating the list of the true rewards obtained
 #         torch.autograd.set_detect_anomaly(True)
         
@@ -177,29 +196,44 @@ class NeuralTS:
         if self.t==1:
             self.current_loss.backward(retain_graph=True)    
         else:
-            self.current_loss.backward
+            self.current_loss.backward()
             
         self.optimizer.step() 
         self.optimizer.zero_grad() 
-       
+           
         #f(x,theta_t)
         f_t=self.estimator(self.features[arm])
-        estimated_reward=f_t.detach().numpy()
-        if self.t%100==0:
-            print("estimated reward",estimated_reward)
-            print("real reward",reward)
-            print("loss ",self.current_loss)
-
+    
         g=torch.autograd.grad(outputs=f_t,inputs=self.estimator.parameters())
-        g=flatten(g).detach().numpy()
+        
+        
+        g=flatten(g)
         g=g/(np.sqrt(self.m))
+            
         # online update of the inverse of the design matrix
-#         omega=self.DesignInv@g
-#         self.DesignInv-=(omega@(omega.T))/(1+(g.T)@omega)
-        self.Design+=g@(g.T)
-        self.DesignInv=la.inv(self.Design)
-#         print(la.norm(self.DesignInv))
+        #         omega=self.DesignInv@g
+        #         self.DesignInv-=(omega@(omega.T))/(1+(g.T)@omega)
+        
+        self.Design+=torch.matmul(g,g.T)
+        self.DesignInv=torch.inverse(torch.diag(torch.diag(self.Design,0))) #approximation proposed by the authors
+    
         self.t+=1
+            
+    def update_features(self):
+        '''This method simulates the situation where the features are changed at each time t'''
+        K=self.K
+        d=self.d//2
+        
+        #Generation of normalized features - ||x|| = 1 and x symmetric
+        X = torch.randn((K,d))
+        X=torch.Tensor([transform(x) for x in X])
+        self.features=X
+        
+    def new_MAB(self):
+        '''This method actualize the MAB problem given the new features'''
+        self.update_features()
+        
+        return self.bandit_generator(self.features,sigma=self.sigma)
 
     def name(self):
         return self.strat_name
