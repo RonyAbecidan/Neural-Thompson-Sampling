@@ -161,8 +161,8 @@ class NeuralTS:
         self.DesignInv = torch.Tensor((1/self.reg)*np.eye(self.p))
         self.ChosenArms=[]
         self.rewards=torch.Tensor([])
-            
         self.estimator.init_weights()
+        self.theta_zero=get_theta(self.estimator)
         
     def chooseArmToPlay(self):
         estimated_rewards=torch.Tensor([])
@@ -177,9 +177,9 @@ class NeuralTS:
             r_tilda=(self.nu)*(sigma)*torch.randn(1)+f.detach()
             estimated_rewards=torch.cat([estimated_rewards,r_tilda.detach()])
         
-            arm_to_pull=torch.argmax(estimated_rewards)
-            self.ChosenArms.append(self.features[arm_to_pull])
-            return arm_to_pull
+        arm_to_pull=torch.argmax(estimated_rewards)
+        self.ChosenArms.append(self.features[arm_to_pull])
+        return arm_to_pull
 
     def receiveReward(self,arm,reward):
         estimated_rewards=torch.Tensor([])
@@ -215,7 +215,7 @@ class NeuralTS:
         #         self.DesignInv-=(omega@(omega.T))/(1+(g.T)@omega)
         
         self.Design+=torch.matmul(g,g.T)
-        self.DesignInv=torch.inverse(torch.diag(torch.diag(self.Design,0))) #approximation proposed by the authors
+        self.DesignInv=torch.inverse(self.Design)
     
         self.t+=1
             

@@ -20,6 +20,8 @@ def OneBanditOneLearnerOneRun(bandit, strategy, timeHorizon,update=False):
     for t in tqdm(range(timeHorizon)):
         # choose the next arm to play with the bandit algorithm
         arm = strategy.chooseArmToPlay()
+        # if strategy.strat_name=='NeuralTS':
+        #     print(max(bandit.means)-bandit.means[arm])
         # get the reward of the chosen arm
         reward = bandit.generateReward(arm)
         # update the algorithm with the observed reward
