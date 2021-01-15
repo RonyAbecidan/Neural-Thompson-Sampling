@@ -28,6 +28,8 @@ class MeanEstimator(nn.Module):
         self.d=d
         self.m=m
         self.L=L
+        assert m%2==0,"m should be pair !"
+        assert d%2==0,"d should be pair !"
         
         self.modules = [nn.Linear(d,m,bias=False),nn.ReLU()]
         
@@ -35,8 +37,6 @@ class MeanEstimator(nn.Module):
         for i in range (1,L-1):
             self.modules.append(nn.Linear(m,m,bias=False))
             self.modules.append(nn.ReLU())
-            
-        last_init=np.sqrt(2/m)*torch.randn(1,self.m//2)
        
         self.modules.append(nn.Linear(m,1,bias=False))
         self.modules.append(nn.ReLU())
@@ -74,6 +74,8 @@ class MeanEstimatorWithBias(nn.Module):
         self.d=d
         self.m=m
         self.L=L
+        assert m%2==0,"m should be pair !"
+        assert d%2==0,"d should be pair !"
         
         self.modules = [nn.Linear(d,m),nn.ReLU()]
         
@@ -82,7 +84,6 @@ class MeanEstimatorWithBias(nn.Module):
             self.modules.append(nn.Linear(m,m))
             self.modules.append(nn.ReLU())
             
-        last_init=np.sqrt(2/m)*torch.randn(1,self.m//2)
        
         self.modules.append(nn.Linear(m,1))
         self.modules.append(nn.ReLU())
