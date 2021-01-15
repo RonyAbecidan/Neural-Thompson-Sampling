@@ -61,3 +61,44 @@ class TruncatedExponential:
     def sample(self):
         # generate a reward from an Exponential arm 
         return min(-(1/self.p)*log(random()),self.trunc)
+        
+        
+class Gaussian:
+
+    def __init__(self,mu,var=1):
+        # create a Gaussian arm with specified mean and variance
+        self.mean = mu
+        self.variance = var
+
+    def sample(self):
+        # generate a reward from a Gaussian arm 
+        return self.mean + sqrt(self.variance)*np.random.normal()
+    
+    def toString(self):
+         return f"GaussianMAB({np.round(self.mean,2)},{np.round(self.variance,2)})"
+        
+    def __repr__(self):
+        return self.toString()
+    
+    def __str__(self):
+        return self.toString()
+        
+class ZeroOne:
+    '''A zero or one bandit for a classification task'''
+
+    def __init__(self,zero_or_one):
+        self.mean=zero_or_one
+
+    def sample(self):
+        #here it is deterministic
+        return self.mean
+    
+    def toString(self):
+         return f"ClMAB({self.mean})"
+        
+    def __repr__(self):
+        return self.toString()
+    
+    def __str__(self):
+        return self.toString()
+       
