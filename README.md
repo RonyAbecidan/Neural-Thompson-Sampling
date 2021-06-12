@@ -1,3 +1,5 @@
+![visitors](https://visitor-badge.glitch.me/badge?page_id=RonyAbecidan.Neural-Thompson-Sampling)
+
 ## Study of the Neural Thompson Sampling algorithm
 
 This repository is the result of an assignment for the [Sequential Decision Making](http://chercheurs.lille.inria.fr/ekaufman/SDM.html) class of the [University of Lille's Msc. in Data Science](http://bit.ly/MasterDSULille) taught by [Emilie Kaufmann](http://chercheurs.lille.inria.fr/ekaufman/).
