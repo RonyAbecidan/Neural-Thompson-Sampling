@@ -2,7 +2,7 @@
 
 ## Study of the Neural Thompson Sampling algorithm
 
-This repository is the result of an assignment for the [Sequential Decision Making](http://chercheurs.lille.inria.fr/ekaufman/SDM.html) class of the [University of Lille's Msc. in Data Science](http://bit.ly/MasterDSULille) taught by [Emilie Kaufmann](http://chercheurs.lille.inria.fr/ekaufman/).
+This repository is the result of an assignment for the [Sequential Decision Making](https://emiliekaufmann.github.io/SDM.html) class of the [University of Lille's Msc. in Data Science](https://www.univ-lille.fr/formations/fr-00020710/) taught by [Emilie Kaufmann](https://emiliekaufmann.github.io/).
 
 #### Authors :
 - Etienne Levecque
